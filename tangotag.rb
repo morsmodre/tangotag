@@ -16,17 +16,29 @@ PARTICLES = ["con"]
 OptionParser.new do |opts|
 	opts.banner = "Usage: #{$0} -f <folder>"
 	
-	opts.on("-f", "--folder FOLDER", "Select folder with -f option") do |folder|
+	opts.on("-f", "--folder FOLDER", "The folder where the files modification will happen") do |folder|
 		ARGS[:folder] = folder.encode('utf-8', 'iso-8859-1')
 	end
+	
 	
 	ARGS[:verbose] = false
 	opts.on("-v", "--verbose", "Run verbosely") do |v|
 		ARGS[:verbose] = v
 	end
 	
+	ARGS[:verbose] = false
+	opts.on("--force", "Force action if some doubts appear") do |f|
+		ARGS[:force] = f
+	end
+	
+	
 	opts.on("--list", "List artist tag in the folders files") do |list|
 		ARGS[:list] = list
+	end
+	
+	opts.on("--parsedate", "Parsed dates in the formats YYYY-MM-DD and DD-MM-YYYY and fills the date tag with that info",
+				"  Use the force option to overide present year tag information.") do |parsedate|
+		ARGS[:parsedate] = parsedate
 	end
 	
 	opts.on("--camelize", "Changed the names to be conformant with camel-case") do |camelize|
@@ -95,10 +107,57 @@ class AudioFile
 		end
 	end
 
+	def genre
+		if not @genre.nil?
+			return @genre
+		end
+		
+		TagLib::FileRef.open(file_name) do |audio_file|
+			#no FileRef or no tag
+			if audio_file.nil? || audio_file.tag.nil?
+				return nil
+			end	
+			
+			#if some tag doesn't exist: nil it, else add what's in the file
+			if audio_file.tag.genre.nil?
+				return nil
+			else
+				@genre=audio_file.tag.genre
+			end
+		end
+	end
 	
 	#sizes for year, artist and title
-	def pretty_print(size1, size2, size3)
-		puts "#{year.to_s.ljust(size1)} #{artist.to_s.ljust(size2)} #{title.to_s.ljust(size3)}  #{file_name}"
+	def pretty_print(size1, size2, size3, size4)
+		puts "#{year.to_s.ljust(size1)} #{artist.to_s.ljust(size2)} #{title.to_s.ljust(size3)} #{genre.to_s.ljust(size4)}  #{file_name}"
+	end
+	
+	def get_date_from_name(*patterns)
+		matches = patterns.map do |p| 
+			
+			file_name =~ p #match
+			
+			if not $~.nil?
+				#found a pattern: place it in the YYYY-MM-DD form if needed
+				pieces = $~.to_s.split("-")
+				
+				if pieces[0].length!=4
+					pieces.reverse!
+				end
+				
+				next pieces.join("-")
+			else 
+				next nil
+			end
+		end
+		
+		matches.compact!
+		
+		if matches.uniq.length>1
+			raise "\tMore then one match of date in filename!!"
+		end
+		
+		return matches[0] #if no match => nil
 	end
 end
 
@@ -184,6 +243,10 @@ class AudioFactory
 
 	def self.mp4?
 		return @file_name =~ /.m4a$/
+	end
+	
+	def self.bulk_create(file_name_list)
+		return file_name_list.map {|f| AudioFactory.create(f)}
 	end
 end
 	
@@ -307,22 +370,48 @@ end
 
 
 def list3(files)
-	pretty_artists = []
-	pretty_titles = []
-	pretty_years = []
-	pretty_filenames = []
-	
-	#make a list of audio files
-	audio_files = files.map {|f| AudioFactory.create(f)}
+	audio_files = AudioFactory.bulk_create(files)
 	
 	year_space = audio_files.map{|f| f.year}.map{|y| y.size}.max
 	artist_space= audio_files.map{|f| f.artist}.map{|a| a.size}.max
 	title_space = audio_files.map{|f| f.title}.map{|t| t.size}.max
+	genre_space = audio_files.map{|f| f.genre}.map{|g| g.size}.max
 	
 	#assumes pretty arrays have the same length
-	audio_files.each{|f| f.pretty_print(year_space, artist_space, title_space)}
+	audio_files.each{|f| f.pretty_print(year_space, artist_space, title_space, genre_space)}
 end
 
+
+def name2date(files)
+	
+	audio_files = AudioFactory.bulk_create(files)
+	
+	#get dates from filename
+	name_dates = audio_files.map{|a| a.get_date_from_name(/19\d\d\-\d\d-\d\d/, /\d\d\-\d\d-19\d\d/) }
+
+	#update dates in date tag
+	audio_files.each do |a|
+		
+		#get dates from filename
+		date = a.get_date_from_name(/19\d\d\-\d\d-\d\d/, /\d\d\-\d\d-19\d\d/)
+		
+		#do nothing if filename has no date...
+		if date.nil?
+			next
+		end
+		
+		#if both have the same info update year
+		if date.include? a.year
+			a.year=date
+			puts " ~ updated year tag to #{date} of file #{a.file_name}"
+		elsif ARGS[:force]
+			a.year=date
+			puts " ~ forced updated year tag to #{date} of file #{a.file_name}"
+		else
+			puts " ~ Did nothing since current year tag is #{a.year} ... use --force option if you want to change if to #{date}"
+		end
+	end
+end
 
 
 cd(ARGS[:folder])
@@ -333,6 +422,10 @@ all_files = all_files.select{|fn| fn =~ /.m4a$/ || fn =~ /.mp3$/ }
 
 if ARGS[:list]
 	list3(all_files)
+end
+
+if ARGS[:parsedate]
+	name2date(all_files)
 end
 
 if ARGS[:camelize]
