@@ -41,6 +41,10 @@ OptionParser.new do |opts|
 		ARGS[:parsedate] = parsedate
 	end
 	
+	opts.on("--contextdate", "Add description.") do |contextdate|
+		ARGS[:contextdate] = contextdate
+	end
+	
 	opts.on("--camelize", "Changed the names to be conformant with camel-case") do |camelize|
 		ARGS[:camelize] = camelize
 	end
@@ -55,7 +59,7 @@ end.parse!
 
 def cd(dir)
 	Dir.chdir(dir)
-	puts "Current directory is  #{dir}/"
+	puts "cd #{dir.split("/")[-1]}"
 end
 
 class AudioFile
@@ -127,9 +131,17 @@ class AudioFile
 		end
 	end
 	
+	def full_date?
+		split_date = year().split("-")
+		return split_date.length==3 &&
+			split_date[0].length==4 &&
+			split_date[1].length==2 &&
+			split_date[2].length==2
+	end
+		
 	#sizes for year, artist and title
 	def pretty_print(size1, size2, size3, size4)
-		puts "#{year.to_s.ljust(size1)} #{artist.to_s.ljust(size2)} #{title.to_s.ljust(size3)} #{genre.to_s.ljust(size4)}  #{file_name}"
+		return "#{year.to_s.ljust(size1)} #{artist.to_s.ljust(size2)} #{title.to_s.ljust(size3)} #{genre.to_s.ljust(size4)}  #{file_name}"
 	end
 	
 	def get_date_from_name(*patterns)
@@ -173,7 +185,7 @@ class Mp3File < AudioFile
 			
 			tag = mp3_file.id3v2_tag
 			if tag.nil?
-				puts "\tNo tag found in this file !!!"
+				puts "\tNo tag found in this file while calling year()!!!"
 				return nil
 			end
 			
@@ -189,7 +201,12 @@ class Mp3File < AudioFile
 	def year=(year)
 		TagLib::MPEG::File.open(file_name) do |mp3_file| 
 			
-			mp3_file.id3v2_tag.frame_list('TDRC').first.field_list = [year]
+			tag = mp3_file.id3v2_tag
+			if tag.nil?
+				puts "\tNo tag found in this file while calling year=#{year}!!!"
+				return nil
+			end
+			tag.frame_list('TDRC').first.field_list = [year]
 			mp3_file.save()
 		end
 		@year = year
@@ -204,7 +221,6 @@ class Mp4File < AudioFile
 		end		
 
 		TagLib::MP4::File.open(file_name) do |mp4_file|
-			
 			#TODO protect from nil --> has_key?
 			item_list_map = mp4_file.tag.item_list_map
 			return item_list_map["©day"].to_string_list.first
@@ -375,10 +391,10 @@ def list3(files)
 	year_space = audio_files.map{|f| f.year}.map{|y| y.size}.max
 	artist_space= audio_files.map{|f| f.artist}.map{|a| a.size}.max
 	title_space = audio_files.map{|f| f.title}.map{|t| t.size}.max
-	genre_space = audio_files.map{|f| f.genre}.map{|g| g.size}.max
+	genre_space = audio_files.map{|f| f.genre}.map{|g| g.nil? ? 0 : g.size}.max
 	
 	#assumes pretty arrays have the same length
-	audio_files.each{|f| f.pretty_print(year_space, artist_space, title_space, genre_space)}
+	audio_files.each{|f| puts "   "+f.pretty_print(year_space, artist_space, title_space, genre_space)}
 end
 
 
@@ -414,15 +430,95 @@ def name2date(files)
 end
 
 
+
+def get_folder_audio_files
+	return Dir.glob("*.*").select{|fn| fn =~ /.m4a$/ || fn =~ /.mp3$/ }
+end
+
 cd(ARGS[:folder])
+all_files = get_folder_audio_files()
 
 #search for audio files: ~mp3 and ~m4a
-all_files = Dir.glob("*.*")
-all_files = all_files.select{|fn| fn =~ /.m4a$/ || fn =~ /.mp3$/ }
 
 if ARGS[:list]
-	list3(all_files)
+	# in current folder
+	list3(all_files) 
+	
+	#change to sub folders
+	Dir.glob("*").select{|f| File.directory? f}.each do |f|
+		cd(File.join(ARGS[:folder], f))
+		all_files = get_folder_audio_files()
+		list3(all_files) 
+	end
 end
+
+if ARGS[:contextdate]
+	
+	list3(all_files)
+	audio_files = AudioFactory.bulk_create(all_files)
+	
+	#of the form title=> [audio_file, context_date1, context_date2]
+	#if the title is repeated there is only one entrace #FIXME
+	map = {}
+	#only coun files that dont have a perfect date
+	audio_files.reject{|a| a.full_date? }.each{|a| map[a.title]=[a]}
+	
+	if(ARGS[:verbose])
+		puts " * Created a map of size [#{map.length}] with [#{audio_files.length}] files."
+		puts " * #{map}" if map.length>0
+	end
+	
+	cd("..")
+	Dir.glob("*").reject{|f| f==ARGS[:folder]}.select{|f| File.directory? f}.each do |f|
+		#enter context filder
+		cd(f)
+		
+		context_audio = AudioFactory.bulk_create(get_folder_audio_files())
+		#run the context audio files
+		context_audio.each do |a| 
+			#if the title of the context audio files is one that we're looking for7
+			if not map[a.title].nil? 
+				#and if the date of the song being updated is the same as a song in the current folder
+				# and if that soung's context date is perfect: add it to map
+				if map[a.title].length>=1 && a.full_date?
+					map[a.title].push(a.year)
+					if(ARGS[:verbose])
+						puts " * Added #{a.year} to map[#{a.title}]"
+					end
+				end
+			end
+		end
+		#exists context folder
+		cd("..")
+	end
+	
+	if(ARGS[:verbose])
+		puts " * #{map}" if map.length>0
+	end
+	
+	cd(ARGS[:folder])
+	#check if map has some correct dates taken from context
+	#if so, add them to the object
+	#do nothing if there are two different dates
+	map.each do |key, array|
+		if array.uniq.length==1
+			puts "No context dates were found for #{key}"
+		elsif array.uniq.length>2
+			puts "Several context dates were found: #{array[1..-1].join(", ")}"
+			puts "... none used"
+		else
+			#OK!
+			audio_file = array[0]
+			context_year = array[1]
+			old_year = audio_file.year
+			audio_file.year=context_year
+			puts "YES! Changed year to #{context_year} (old:#{old_year}) the file #{audio_file.title}"
+		end
+	end
+end
+
+	
+	
 
 if ARGS[:parsedate]
 	name2date(all_files)
@@ -441,4 +537,26 @@ if not ARGS[:tclean].nil? && ARGS[:tclean]!=0
 	puts ""
 	list(all_files)
 end
+
+=begin
+if __FILE__ == $0
+  # Do something.. run tests, call a method, etc. We're direct.
+end
+
+begin #unneded se start uma funcao
+  do_division_by_zero
+rescue => exception
+  puts exception.backtrace
+end
+
+# [*items] converts a single object into an array with that single object
+# of converts an array back into, well, an array again
+[*items].each do |item|
+  # ...
+end
+
+h = { :age => 10 }
+h[:name].downcase                         # ERROR
+h[:name].downcase rescue "No name"        # => "No name"
+=end
 
