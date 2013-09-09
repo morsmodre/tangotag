@@ -3,6 +3,9 @@
 require "rubygems"
 require "taglib"
 require 'optparse'
+require 'nokogiri'
+require 'open-uri'
+
 
 
 Encoding.default_internal = 'UTF-8'
@@ -12,6 +15,8 @@ Encoding.default_external = 'UTF-8'
 ARGS = {}
 #particles not to be capitalized
 PARTICLES = ["con"]
+
+NOKOGIRI = {:biagi => "D:/git/tangotag/biagi.html" }#"http://www.tango-dj.at/DJ-ing/collection/orchestras/Biagi.htm"}
 
 OptionParser.new do |opts|
 	opts.banner = "Usage: #{$0} -f <folder>"
@@ -45,11 +50,21 @@ OptionParser.new do |opts|
 		ARGS[:contextdate] = contextdate
 	end
 	
+	opts.on("--nokogiri ORQUESTRA",
+			[:biagi ],  "Add description.") do |orquestra|
+		ARGS[:nokogiri] = NOKOGIRI[orquestra]
+	end
+	
+	opts.on("--changedate YYYY-MM-DD", "Changes the year tags to YYYY-MM-DD of the first file in the --folder.") do |new_date|
+		ARGS[:changedate] = new_date
+	end
+	
+	
 	opts.on("--camelize", "Changed the names to be conformant with camel-case") do |camelize|
 		ARGS[:camelize] = camelize
 	end
 	
-	opts.on("--tclean x,y,z", Array, "Clean the titles by removing the PART string from them") do |list|
+	opts.on("--tclean x,y,z", Array, "Clean the titles by removing the x,y,z strings from them.") do |list|
 		ARGS[:tclean] = list.map {|x| x.encode('utf-8', 'iso-8859-1') }
 	end
 	
@@ -193,23 +208,23 @@ class Mp3File < AudioFile
 				puts "\tNo year was found..."
 				return nil
 			end
-			
+		
 			return tag.frame_list('TDRC').first.field_list.first
 		end
 	end
 	
-	def year=(year)
+	def year=(new_year)
 		TagLib::MPEG::File.open(file_name) do |mp3_file| 
 			
 			tag = mp3_file.id3v2_tag
 			if tag.nil?
-				puts "\tNo tag found in this file while calling year=#{year}!!!"
+				puts "\tNo tag found in this file while calling year=#{new_year}!!!"
 				return nil
 			end
-			tag.frame_list('TDRC').first.field_list = [year]
+			tag.frame_list('TDRC').first.field_list = [new_year]
 			mp3_file.save()
 		end
-		@year = year
+		@year = new_year
 	end
 end
 
@@ -227,17 +242,17 @@ class Mp4File < AudioFile
 		end
 	end
 	
-	def year=(year)
+	def year=(new_year)
 		TagLib::MP4::File.open(file_name) do |mp4_file|
 			
 			#TODO protect from nil
 			item_list_map = mp4_file.tag.item_list_map
 			
 			#replaces previous "©day" value
-			item_list_map.insert("©day", TagLib::MP4::Item.from_string_list([year]))
+			item_list_map.insert("©day", TagLib::MP4::Item.from_string_list([new_year]))
 			mp4_file.save()
 		end
-		@year = year
+		@year = new_year
 	end
 end
 
@@ -452,6 +467,14 @@ if ARGS[:list]
 	end
 end
 
+if ARGS[:changedate]
+	list3(all_files) 
+	
+	file = AudioFactory.bulk_create(all_files).first
+	puts "Changing year from #{file.year} to #{ARGS[:changedate]}"
+	file.year=ARGS[:changedate]
+end
+
 if ARGS[:contextdate]
 	
 	list3(all_files)
@@ -461,7 +484,7 @@ if ARGS[:contextdate]
 	#if the title is repeated there is only one entrace #FIXME
 	map = {}
 	#only coun files that dont have a perfect date
-	audio_files.reject{|a| a.full_date? }.each{|a| map[a.title]=[a]}
+	audio_files.reject{|a| a.full_date? }.each{|a| map[a.title.downcase]=[a]}
 	
 	if(ARGS[:verbose])
 		puts " * Created a map of size [#{map.length}] with [#{audio_files.length}] files."
@@ -476,12 +499,20 @@ if ARGS[:contextdate]
 		context_audio = AudioFactory.bulk_create(get_folder_audio_files())
 		#run the context audio files
 		context_audio.each do |a| 
-			#if the title of the context audio files is one that we're looking for7
-			if not map[a.title].nil? 
+			if(ARGS[:verbose])
+				puts " * Context search for title [#{a.title.downcase}]\t#{a.file_name}"
+			end
+			#if the title of the context audio files is one that we're looking for
+			if not map[a.title.downcase].nil? 
+				if(ARGS[:verbose])
+					puts " * FOUND!"
+					puts " * Map Length = #{map[a.title.downcase].length}"
+					puts " * Full date  = #{a.full_date?} ... #{a.year}"
+				end
 				#and if the date of the song being updated is the same as a song in the current folder
 				# and if that soung's context date is perfect: add it to map
-				if map[a.title].length>=1 && a.full_date?
-					map[a.title].push(a.year)
+				if map[a.title.downcase].length>=1 && a.full_date?
+					map[a.title.downcase].push(a.year)
 					if(ARGS[:verbose])
 						puts " * Added #{a.year} to map[#{a.title}]"
 					end
@@ -493,6 +524,7 @@ if ARGS[:contextdate]
 	end
 	
 	if(ARGS[:verbose])
+		puts " * Map after context search:"
 		puts " * #{map}" if map.length>0
 	end
 	
@@ -517,8 +549,43 @@ if ARGS[:contextdate]
 	end
 end
 
+if ARGS[:nokogiri]
 	
+	list3(all_files)
+	audio_files = AudioFactory.bulk_create(all_files)
 	
+	#only count files that dont have a perfect date
+	audio_files.reject{|a| a.full_date? }.each do |a| 
+		
+		doc = Nokogiri::HTML(open(ARGS[:nokogiri]))
+		
+		#Processes the title to fit the html:
+		# - capitalize it (first character and character after parentisis)
+		# - remove the latin characters from song title 
+		latin =	'ÀÁÂÃàáâãÇçÈÉÊèéêÌÍìíÑñÒÓÕòóõÙÚùúü'
+		normal =	'AAAAaaaaCcEEEeeeIIiiNnOOOoooUUuuu'
+		processed_title = a.title.capitalize.tr(latin, normal).split("(").map(&:capitalize).join("(")
+		
+		xpath = "//a[translate(.,'#{latin}','#{normal}')='#{processed_title}']/../../td[4]"
+		if ARGS[:verbose]
+			puts " * #{xpath}"
+		end
+		dates = doc.xpath(xpath).map {|link| link.content.to_s}
+
+		dates.uniq!
+		
+		if(dates.length == 0)
+			puts " * No dates found for title #{a.title.capitalize}"
+		elsif(dates.length>1)
+			puts " * Too many dates found for #{a.title.capitalize} :: #{dates.join(",")}"
+		elsif (dates.length==1)
+			date = dates.first.split(".").reverse.join("-")
+			puts "Filling year:#{date} --> #{a.title.capitalize}"
+			a.year = date
+		end
+	end
+end
+
 
 if ARGS[:parsedate]
 	name2date(all_files)
@@ -533,7 +600,7 @@ end
 if not ARGS[:tclean].nil? && ARGS[:tclean]!=0
 	longest_tclean= ARGS[:tclean].map{|x| x.size}.max
 	ARGS[:tclean].each{|w| puts "Removing #{w.ljust(longest_tclean)} from titles ..." }
-	#ARGS[:tclean].each{|s| tclean(all_files,s) }
+	ARGS[:tclean].each{|s| tclean(all_files,s) }
 	puts ""
 	list(all_files)
 end
