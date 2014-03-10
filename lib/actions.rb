@@ -136,12 +136,16 @@ class ActionNokogiri < Action
       if dates.length == 0
         puts " * No dates found for title #{a.title.capitalize}"
       elsif dates.length>1
-        puts " * Too many dates found for #{a.title.capitalize} :: #{dates.join(",")}"
+        puts " * Too many dates found for #{a.title.capitalize} :: #{dates.join(" ; ")}"
       elsif dates.length==1
         date = dates.first.split(".").reverse.join("-")
-        puts "   Filling year=#{date} --> #{a.title.capitalize}"
-        if not no
-          a.year = date
+        if a.year==date
+          puts " ! Year is kept the same: #{date}"
+        else
+          puts "   Filling year=#{date} --> #{a.title.capitalize}"
+          if not no
+            a.year = date
+          end
         end
       end
     end
