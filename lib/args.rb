@@ -54,7 +54,7 @@ class Args
       #Write options
 
       opts.on('--contextdate',
-              'Sets the date of the files according to the context, i.e., the files in the sibling folders') do |list|
+              'Sets the date of the files according to the context, i.e., the files in the sibling folders. If the date is already in the form YYYY-MM-DD does nothing.') do |list|
         options.date_it = true
       end
 

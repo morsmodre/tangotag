@@ -46,7 +46,7 @@ class YearUtils
       compressed_list.first
     end
 
-    possibilities = compressed_list.join(" ")
+    possibilities = compressed_list.join("  ")
     @log.warn("Several possible years were found: #{possibilities}")
     possibilities
   end

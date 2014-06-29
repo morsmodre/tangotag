@@ -79,13 +79,11 @@ class ActionSetDateByContext < Action
     possible_years = get_possible_years_by_title(file)
     year_choice = YearUtils.instance.choose_year(possible_years)
 
-    # puts "Choice: #{year_choice}\tpossibilities #{possible_years}" should be logged!
-
     file = AudioFactory.create(file)
     if year_choice.nil?
-      puts " * No year option found for #{file.title}"
+      puts " * No year option found for  #{file.title}"
     elsif year_choice.split(' ').size!=1
-      puts " ! Several (#{year_choice.split(' ').size}) options found :: #{year_choice}"
+      puts " ! Several (#{year_choice.split(' ').size}) options found for  #{file.title} :: #{year_choice}"
 
     else
       if not no
@@ -96,7 +94,7 @@ class ActionSetDateByContext < Action
   end
 
   def do(files, no=false)
-    files.each {|f| change_year(f, no)}
+    files.each {|f| change_year(f, no) unless AudioFactory.create(f).full_date? }
   end
 
 end #ActionSetDateByContext

@@ -75,8 +75,8 @@ class ActionSetDateByContextTest < ActionBaseTest
     assert_equal('1941-12-31', AudioFactory.create(aux_file).year)
   end
 
-  # Context year does not change since date is already full
-  def test_action_cannot_change_date_context
+  # Context year does not change since there are several options
+  def test_action_several_context_dates
     action = ActionSetDateByContext.new
     aux_file = 'z.mp3'
     assert_equal('1982-09-10', AudioFactory.create(aux_file).year)
@@ -84,8 +84,8 @@ class ActionSetDateByContextTest < ActionBaseTest
     assert_equal('1982-09-10', AudioFactory.create(aux_file).year)
   end
 
-  # Context year does not change since date is already full, even when other values exist
-  def test_action_full_date_already
+  # Context year does not change since there are several options (other and the same)
+  def test_action_several_context_dates_and_same_date
     action = ActionSetDateByContext.new
     aux_file = 'w.mp3'
     assert_equal('1941-11-22', AudioFactory.create(aux_file).year)
