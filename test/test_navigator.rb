@@ -70,17 +70,17 @@ class NavigatorTest < Test::Unit::TestCase
   end
 
   def test_get_sibling_folders
-    Dir.chdir('c:/git/tangotag/test/data/action/a')
+    Dir.chdir('c:/git/tangotag/test/data/action/contextdate/a')
     navigator = Navigator.instance
     sibling_folders = navigator.get_sibling_folders
     assert_equal(1, sibling_folders.size)
     assert_equal('b', sibling_folders[0])
     #back to current dir is working too
-    assert_equal('c:/git/tangotag/test/data/action/a', Dir.pwd.to_s)
+    assert_equal('c:/git/tangotag/test/data/action/contextdate/a', Dir.pwd.to_s)
   end
 
   def test_in_sibling_folders
-    Dir.chdir('c:/git/tangotag/test/data/action/a')
+    Dir.chdir('c:/git/tangotag/test/data/action/contextdate/a')
     navigator = Navigator.instance
     aux_string = 'F: '
     navigator.in_sibling_folders do

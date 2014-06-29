@@ -28,7 +28,7 @@ class YearUtils
 
 
   # Choose a year according to the possibilities
-  # nil is returned if none or more than one option is needed
+  # nil is returned if none is found
   def choose_year(year_list)
     # Check there are more then one full_year or year option
     all_full_years = year_list.uniq.map{|y| if full_year?(y) then y end}.compact
@@ -36,20 +36,19 @@ class YearUtils
 
     if year_list.empty?
       @log.warn('No possible years found!')
-      nil
-    elsif year_list.uniq.size==1 #one unique result
-      year_list.first
-
-    elsif all_full_years.size == 1 and
-          all_short_years.size == 1 and
-          year_in_full_year?(all_short_years.first, all_full_years.first)
-      # If only one full and one short year exits and the full year is the year
-      return all_full_years.first
-
-    else
-      @log.warn("Several possible years were found: #{year_list[0..-1].join(", ")}")
-      nil
+      return nil
     end
+
+    # Pre-process the list in order to remove repeated values
+    compressed_list = compress_list(year_list)
+
+    if compressed_list.size==1 #one unique result
+      compressed_list.first
+    end
+
+    possibilities = compressed_list.join(" ")
+    @log.warn("Several possible years were found: #{possibilities}")
+    possibilities
   end
 
   def year_in_full_year?(y, fy)
@@ -67,6 +66,22 @@ class YearUtils
         split_date[0].length==4 &&
         split_date[1].length==2 &&
         split_date[2].length==2
+  end
+
+  ## Compresses the given year_list in order to remove repeated values and
+  # short_year values that have a full_year values to match.
+  def compress_list(year_list)
+    year_list.uniq.map{|y| unless small_year_in_list?(y, year_list) then y end}.compact
+  end
+
+  ## checks if the small_year is in some of the elements of the list with exception of himself
+  def small_year_in_list?(small_year, year_list)
+    for y in year_list
+      if not small_year==y and y.include? small_year
+        return true
+      end
+    end
+    false
   end
 
 end #YearUtils

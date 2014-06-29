@@ -37,14 +37,21 @@ class ActionSetDateByContextTest < ActionBaseTest
 
   # Change folder to action test data folder
   def setup
-    super
+    #folder for context date tests
+    Dir.chdir(Navigator.BASE_DIR+'/test/data/action/contextdate/a')
     #copy a file to be changed in tests and deleted in the end
-    FileUtils.cp('a1.mp3', 'x.mp3')
+    FileUtils.cp('a1.mp3', 'z.mp3')
+    FileUtils.cp('a2.mp3', 'x.mp3')
+    FileUtils.cp('a3.mp3', 'y.mp3')
+    FileUtils.cp('a4.mp3', 'w.mp3')
   end
 
   # Go back to the default folder.
   def teardown
     FileUtils.remove_file('x.mp3', true)
+    FileUtils.remove_file('z.mp3', true)
+    FileUtils.remove_file('y.mp3', true)
+    FileUtils.remove_file('w.mp3', true)
     super
   end
 
@@ -52,18 +59,38 @@ class ActionSetDateByContextTest < ActionBaseTest
   def test_get_possible_years_by_title
     action = ActionSetDateByContext.new
     dates_found = action.get_possible_years_by_title 'a1.mp3'
-    assert_equal(3, dates_found.size)
+    assert_equal(4, dates_found.size)
     assert_equal('1942',       dates_found[0])
     assert_equal('1942-09-10', dates_found[1])
     assert_equal('1942-09-10', dates_found[2])
+    assert_equal('1979-01-01', dates_found[3])
   end
 
-  # Changes the year of the x.mp3 file according to the context in action/b folder files
+  # Changes the year of the x.mp3 file according to the context in contextdate/b folder files
   def test_action_set_date_context
     action = ActionSetDateByContext.new
-    assert_equal('1982-09-10', AudioFactory.create('x.mp3').year)
-    action.change_year 'x.mp3'
-    assert_equal('1942-09-10', AudioFactory.create('x.mp3').year)
+    aux_file = 'x.mp3'
+    assert_equal('1935-02-14', AudioFactory.create(aux_file).year)
+    action.change_year aux_file
+    assert_equal('1941-12-31', AudioFactory.create(aux_file).year)
+  end
+
+  # Context year does not change since date is already full
+  def test_action_cannot_change_date_context
+    action = ActionSetDateByContext.new
+    aux_file = 'z.mp3'
+    assert_equal('1982-09-10', AudioFactory.create(aux_file).year)
+    action.change_year aux_file
+    assert_equal('1982-09-10', AudioFactory.create(aux_file).year)
+  end
+
+  # Context year does not change since date is already full, even when other values exist
+  def test_action_full_date_already
+    action = ActionSetDateByContext.new
+    aux_file = 'w.mp3'
+    assert_equal('1941-11-22', AudioFactory.create(aux_file).year)
+    action.change_year aux_file
+    assert_equal('1941-11-22', AudioFactory.create(aux_file).year)
   end
 
 end #ActionSetDateByContextTest

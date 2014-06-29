@@ -84,6 +84,9 @@ class ActionSetDateByContext < Action
     file = AudioFactory.create(file)
     if year_choice.nil?
       puts " * No year option found for #{file.title}"
+    elsif year_choice.split(' ').size!=1
+      puts " ! Several (#{year_choice.split(' ').size}) options found :: #{year_choice}"
+
     else
       if not no
         file.year=year_choice
@@ -133,14 +136,18 @@ class ActionNokogiri < Action
 
       dates.uniq!
 
+      # orders dates by year
+      dates.map!{|d| d.split('.').reverse!.join('.') }
+      dates.sort!
+
       if dates.length == 0
         puts " * No dates found for title #{a.title.capitalize}"
       elsif dates.length>1
-        puts " * Too many dates found for #{a.title.capitalize} :: #{dates.join(" ; ")}"
+        puts " * Too many dates found for #{a.title.capitalize} :: #{dates.join(' ; ')}"
       elsif dates.length==1
-        date = dates.first.split(".").reverse.join("-")
+        date = dates.first.split('.').join('-')
         if a.year==date
-          puts " ! Year is kept the same: #{date}"
+          puts " ! Year is kept the same for #{a.title.capitalize} :: #{date}"
         else
           puts "   Filling year=#{date} --> #{a.title.capitalize}"
           if not no
