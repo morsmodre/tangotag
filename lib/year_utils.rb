@@ -29,10 +29,7 @@ class YearUtils
 
   # Choose a year according to the possibilities
   # nil is returned if none is found
-  def choose_year(year_list)
-    # Check there are more then one full_year or year option
-    all_full_years = year_list.uniq.map{|y| if full_year?(y) then y end}.compact
-    all_short_years = year_list.uniq.map{|y| unless full_year?(y) then y end}.compact
+  def choose_year(year_list, year_in_file=nil)
 
     if year_list.empty?
       @log.warn('No possible years found!')
@@ -41,6 +38,8 @@ class YearUtils
 
     # Pre-process the list in order to remove repeated values
     compressed_list = compress_list(year_list)
+    # Further process list to chose the value that fits the current year in the file
+    compressed_list = choose_from_year_file(compressed_list, year_in_file)
 
     if compressed_list.size==1 #one unique result
       compressed_list.first
@@ -72,6 +71,22 @@ class YearUtils
   # short_year values that have a full_year values to match.
   def compress_list(year_list)
     year_list.uniq.map{|y| unless small_year_in_list?(y, year_list) then y end}.compact
+  end
+
+  ## Further compress the list choosing only the elements that mach the year
+  # This is euristic: the year is given by the file
+  def choose_from_year_file(year_list, file_year)
+    #do nothing if file_year is nil
+    if file_year.nil? or year_list.length==1
+      return year_list
+    end
+
+    chosen_list = year_list.uniq.map{|y| if y.include? file_year then y end}.compact
+    if chosen_list.empty?
+      year_list
+    else
+      chosen_list
+    end
   end
 
   ## checks if the small_year is in some of the elements of the list with exception of himself

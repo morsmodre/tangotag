@@ -70,20 +70,26 @@ class ActionSetDateByContext < Action
   def same_title(s1, s2)
     latin =	 'ÀÁÂÃàáâãÇçÈÉÊèéêÌÍìíÑñÒÓÕòóõÙÚùúü'
     normal = 'AAAAaaaaCcEEEeeeIIiiNnOOOoooUUuuu'
-    s1.tr(latin, normal).casecmp(s2.tr(latin, normal))==0
+    s1.downcase.strip.gsub(',','').tr(latin, normal).casecmp(s2.downcase.strip.gsub(',','').tr(latin, normal))==0
   end
 
   # Sets the date of the argument file according to the title of the context files.
   # The context files are those in all siblings folders.
   def change_year(file, no=false)
+
+    #get the possible year from sister folders
     possible_years = get_possible_years_by_title(file)
-    year_choice = YearUtils.instance.choose_year(possible_years)
 
     file = AudioFactory.create(file)
+
+    #year choice according to all possibilities and year in file
+    year_choice = YearUtils.instance.choose_year(possible_years, file.year)
+
     if year_choice.nil?
       puts " * No year option found for  #{file.title}"
     elsif year_choice.split(' ').size!=1
-      puts " ! Several (#{year_choice.split(' ').size}) options found for  #{file.title} :: #{year_choice}"
+      #the options counted here assume the year in the file if possible
+      puts " ! Several (#{year_choice.split(' ').size}) options found for  #{file.title} : #{year_choice}"
 
     else
       if not no

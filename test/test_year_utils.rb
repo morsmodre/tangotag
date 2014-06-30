@@ -21,15 +21,26 @@ class YearUtilsTest < Test::Unit::TestCase
     assert_equal(nil,          yu.choose_year(%w()))
     assert_equal('1928',       yu.choose_year(%w(1928)))
     assert_equal('1928',       yu.choose_year(%w(1928 1928)))
-    assert_equal('1928 1929',  yu.choose_year(%w(1928 1929))) #no choice can be done
+    assert_equal('1928  1929', yu.choose_year(%w(1928 1929))) #no choice can be done
     assert_equal('1941-03-04', yu.choose_year(%w(1941-03-04)))
     assert_equal('1941-03-04', yu.choose_year(%w(1941 1941-03-04))) #merge
 
-    assert_equal('1942 1941-03-05',       yu.choose_year(%w(1942 1941 1941-03-05)))
-    assert_equal('1942 1941-03-05',       yu.choose_year(%w(1942 1941-03-05 1941-03-05)))
-    assert_equal('1942 1941-03-05',       yu.choose_year(%w(1942 1942 1941-03-05)))
-    assert_equal('1942-12-31 1941-03-05', yu.choose_year(%w(1942-12-31 1941-03-05)))
-    assert_equal('1941-03-05 1941-03-04', yu.choose_year(%w(1941-03-05 1941-03-04)))
+    assert_equal('1942  1941-03-05',       yu.choose_year(%w(1942 1941 1941-03-05)))
+    assert_equal('1942  1941-03-05',       yu.choose_year(%w(1942 1941-03-05 1941-03-05)))
+    assert_equal('1942  1941-03-05',       yu.choose_year(%w(1942 1942 1941-03-05)))
+    assert_equal('1942-12-31  1941-03-05', yu.choose_year(%w(1942-12-31 1941-03-05)))
+    assert_equal('1941-03-05  1941-03-04', yu.choose_year(%w(1941-03-05 1941-03-04)))
+  end
+
+  def test_choose_from_year_file
+    yu = YearUtils.instance
+    #yu.verbose(true)
+    assert_equal(['1928'],       yu.choose_from_year_file(%w(1928 1929), '1928'))
+    assert_equal(['1942'],       yu.choose_from_year_file(%w(1942 1941 1941-03-05), '1942'))
+    assert_equal(['1941-03-05'], yu.choose_from_year_file(%w(1942 1941-03-05), '1941'))
+
+    #if the year in the file is totally different ~ trust the context and ignore the yeah
+    assert_equal(%w(1942 1941-03-05), yu.choose_from_year_file(%w(1942 1941-03-05), '1935'))
   end
 
   def test_is_year_in_full_year
